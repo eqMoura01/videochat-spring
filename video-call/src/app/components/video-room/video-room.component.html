@@ -1,0 +1,32 @@
+<div class="container">
+  <h1>Video Chamada</h1>
+  <!-- Formulário para entrar na sala -->
+  <form >
+    <label for="name">Nome:</label>
+    <input type="text" id="name" [(ngModel)]="username" name="name" required />
+
+    <label for="room">ID da Sala:</label>
+    <input type="text" id="room" [(ngModel)]="roomId" name="room" required />
+
+    <button (click)="joinRoom('offer')">Criar Sala</button>
+    <button (click)="joinRoom('join-room')">Entrar na sala</button>
+  </form>
+
+  <!-- Área de vídeo quando em uma sala -->
+  <div *ngIf="roomId">
+    <h2>Sala: {{ roomId }}</h2>
+    <input [(ngModel)]="message" placeholder="Digite sua mensagem" name="message" />
+    <!-- <button (click)="sendMessage(message)">Enviar</button> -->
+
+    <h3>Mensagens:</h3>
+    <ul>
+      <li *ngFor="let msg of messages">{{ msg }}</li>
+    </ul>
+
+    <!-- Elementos de vídeo -->
+    <div class="video-container">
+      <video #localVideo autoplay muted></video>
+      <video #remoteVideo autoplay></video>
+    </div>
+  </div>
+</div>
