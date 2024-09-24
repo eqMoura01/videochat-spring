@@ -11,15 +11,20 @@ import { FormsModule } from '@angular/forms';
   imports: [CommonModule, FormsModule]
 })
 export class VideoRoomComponent implements OnInit {
-  private localStream: MediaStream | undefined;
   private remoteStream: MediaStream | undefined;
-  private didIOffer: boolean = false;
 
+  public localSdp: RTCSessionDescriptionInit | undefined;
+  public localStream: MediaStream | undefined;
+  public didIOffer: boolean = false;
   public roomId: string = 'room1'; // exemplo de roomId
   public messages: string[] = [];
-  public username: string = ''; 
-  public message: string = '';  
-  private peerConnection: RTCPeerConnection | undefined;
+  public username: string = '';
+  public message: string = '';
+  public peerConnection: RTCPeerConnection = new RTCPeerConnection({
+    iceServers: [
+      { urls: 'stun:stun.l.google.com:19302' }
+    ]
+  });
   private peerConfiguration: RTCConfiguration = {
     iceServers: [
       {
@@ -37,21 +42,22 @@ export class VideoRoomComponent implements OnInit {
   ) { }
 
   ngOnInit(): void {
-    this.webSocketService.initializeWebSocketConnection(`ws://localhost:8080/ws`);
+    this.webSocketService.setVideoRoomComponent(this);
+    this.webSocketService.initializeWebSocketConnection(`ws://localhost:8080/ws/call`, this.roomId);
   }
 
   joinRoom(type: string): void {
 
-    console.log('Tipo: ', type);
-
     if (type === 'offer') {
-      this.createOffer();
+      this.createOffer(true);
+      this.didIOffer = true;
     } else if (type === 'join-room') {
       this.remoteJoinRoom();
     }
   }
 
-  async createOffer(): Promise<any> {
+  async createOffer(didIOffer: boolean): Promise<any> {
+
     await this.fetchUserMedia();
 
     this.peerConnection = new RTCPeerConnection(this.peerConfiguration);
@@ -62,7 +68,7 @@ export class VideoRoomComponent implements OnInit {
 
     this.peerConnection.onicecandidate = (event: RTCPeerConnectionIceEvent) => {
       if (event.candidate) {
-        this.webSocketService.sendCandidate(event.candidate, this.roomId);
+        console.log('ICE Candidate: ', event.candidate);
       }
     };
 
@@ -72,37 +78,50 @@ export class VideoRoomComponent implements OnInit {
 
     const offer = await this.peerConnection.createOffer();
     await this.peerConnection.setLocalDescription(offer);
-    this.webSocketService.sendOffer(offer, this.roomId); // Enviar a oferta com o roomId
+    // this.webSocketService.sendOffer(offer, this.roomId); // Enviar a oferta com o roomId
     this.didIOffer = true;
+
+    this.webSocketService.criarSala(this.roomId, offer.sdp!, this.didIOffer);
+
+    this.webSocketService.localSdp = offer;
 
     return offer;
   }
 
-  async createAnswer(offer: RTCSessionDescriptionInit): Promise<any> {
-    await this.fetchUserMedia();
+  async createAnswer(): Promise<any> {
 
-    this.peerConnection = new RTCPeerConnection(this.peerConfiguration);
+    console.log('Creating answer');
+
+    await this.fetchUserMedia();
 
     this.localStream?.getTracks().forEach(track => {
       this.peerConnection?.addTrack(track, this.localStream!);
     });
 
-    this.peerConnection.onicecandidate = (event: RTCPeerConnectionIceEvent) => {
+    this.peerConnection.onicecandidate = (event) => {
       if (event.candidate) {
-        this.webSocketService.sendCandidate(event.candidate, this.roomId);
+        console.log('ICE Candidate: ', event.candidate);
       }
     };
+
+    console.log('Peer connection: ', this.peerConnection);
 
     this.peerConnection.ontrack = (event: RTCTrackEvent) => {
       this.remoteStream = event.streams[0];
     };
 
-    await this.peerConnection.setRemoteDescription(offer);
     const answer = await this.peerConnection.createAnswer();
     await this.peerConnection.setLocalDescription(answer);
-    this.webSocketService.sendAnswer(answer, this.roomId); // Enviar a resposta com o roomId
 
+    console.log('Answer created: ', this.peerConnection);
+
+    this.webSocketService.sendAnswer(answer);
     return answer;
+  }
+
+  setRemoteDescription(sdp: RTCSessionDescriptionInit): void {
+    this.peerConnection?.setRemoteDescription(sdp);
+    console.log('Remote description set', this.peerConnection);
   }
 
   fetchUserMedia = async () => {
@@ -117,17 +136,6 @@ export class VideoRoomComponent implements OnInit {
   }
 
   remoteJoinRoom(): void {
-    // Prepara o RTCSessionsDescriptionInit para enviar ao servidor
-    this.webSocketService.requestOffer(this.roomId).then((offer: RTCSessionDescriptionInit) => {
-      
-      console.log('Offer recebida: ', offer);
-      
-      this.remoteStream = new MediaStream();
-
-      // Define a oferta recebida como a descrição remota
-      this.createAnswer(offer);
-      
-    });
-  
+    this.webSocketService.entrarSala(this.roomId);
   }
 }
