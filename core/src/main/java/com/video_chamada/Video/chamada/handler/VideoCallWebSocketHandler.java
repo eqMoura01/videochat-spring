@@ -28,10 +28,12 @@ public class VideoCallWebSocketHandler extends TextWebSocketHandler {
         String room = rooms.get(clientId);
         if (room != null) {
             rooms.remove(clientId);
-            broadcastToRoom(room, new TextMessage(String.format("{\"type\": \"user-disconnected\", \"userId\": \"%s\"}", clientId)));
+            broadcastToRoom(room,
+                    new TextMessage(String.format("{\"type\": \"user-disconnected\", \"userId\": \"%s\"}", clientId)));
         }
         users.remove(clientId);
-        System.out.println(String.format("Client disconnected: %s from room: %s", clientId, room));
+        System.out.println(String.format("Client disconnected: %s from room: %s. Room size: %s", clientId, room,
+                getClienteCountInRoom(room)));
     }
 
     @Override
@@ -40,38 +42,42 @@ public class VideoCallWebSocketHandler extends TextWebSocketHandler {
         // log.info("Received message: {} from client: {}", payload, session.getId());
         System.out.println(String.format("Received message: %s from client: %s.", payload, session.getId()));
 
-        // Parse the payload and handle the events (joinRoom, offer, answer, etc.)
-        // Example: Handle "joinRoom" event
-        if (payload.startsWith("joinRoom:")) {
-            String room = payload.split(":")[1];
-            joinRoom(session, room);
+        String room = payload.split(":")[1];
+
+        switch (payload.split(":")[0]) {
+            case "joinRoom":
+                joinRoom(session, room);
+                break;
+            case "ready":
+                broadcastToRoom(room, new TextMessage("ready"));
+                break;
+            case "candidate":
+                onCandidate(session, message);
+                break;
+            default:
+                System.out.println("Invalid message type");
+                break;
         }
+        broadcastToRoom(room, message);
     }
 
     private void joinRoom(WebSocketSession session, String room) throws IOException {
-
-        if(isCaller(room)){
-            session.sendMessage(new TextMessage("setCaller"));
+        if (isCaller(room)) {
+            session.sendMessage(new TextMessage("created"));
             System.out.println(String.format("Sending setCaller message to client with ID: %s", session.getId()));
-
-            broadcastToRoom(room, new TextMessage(String.format("Sending setCaller message to client with ID: %s", session.getId())));
-
+            rooms.put(session.getId(), room);
+            return;
         }
-
-
         int roomSize = getClienteCountInRoom(room);
-
         if (roomSize > 1) {
-            session.sendMessage(new TextMessage("Room is full"));
+            session.sendMessage(new TextMessage("full"));
             System.out.println(String.format("Client %s tried to join room %s, but it's full", session.getId(), room));
             return;
         }
-
         rooms.put(session.getId(), room);
-
         session.sendMessage(new TextMessage("joined:" + room));
-
-        System.out.println(String.format("Client %s joined room %s, room size: %s", session.getId(), room, roomSize));
+        System.out.println(String.format("Client %s joined room %s, room size: %s", session.getId(), room,
+                getClienteCountInRoom(room)));
     }
 
     private void broadcastToRoom(String room, TextMessage message) {
@@ -99,8 +105,14 @@ public class VideoCallWebSocketHandler extends TextWebSocketHandler {
         return count;
     }
 
-    private boolean isCaller(String room){
+    private boolean isCaller(String room) {
         return getClienteCountInRoom(room) < 1;
+    }
+
+    private void onCandidate(WebSocketSession session, TextMessage message) {
+        String payload = message.getPayload();
+        String room = payload.split(":")[1];
+        broadcastToRoom(room, new TextMessage(payload));
     }
 
 }
