@@ -81,7 +81,11 @@ public class VideoCallWebSocketHandler extends TextWebSocketHandler {
 
     private void joinRoom(WebSocketSession session, String room) throws IOException {
         if (isCaller(room)) {
-            session.sendMessage(new TextMessage("created"));
+
+            Mensagem mensagem = new Mensagem();
+            mensagem.setType("created");
+            mensagem.setRoom(room);
+            session.sendMessage(new TextMessage(mensagem.toString()));
             rooms.put(session.getId(), room);
             return;
         }
@@ -91,7 +95,13 @@ public class VideoCallWebSocketHandler extends TextWebSocketHandler {
             return;
         }
         rooms.put(session.getId(), room);
-        session.sendMessage(new TextMessage("joined:" + room));
+
+
+
+        Mensagem mensagem = new Mensagem();
+        mensagem.setType("joined");
+        mensagem.setRoom(room);
+        session.sendMessage(new TextMessage(mensagem.toString()));
     }
 
     private void broadcastToRoom(String room, TextMessage message) {
