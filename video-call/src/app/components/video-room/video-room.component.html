@@ -7,17 +7,13 @@
 
     <label for="room">ID da Sala:</label>
     <input type="text" id="room" [(ngModel)]="roomId" name="room" required />
-
-    <button (click)="joinRoom('offer')">Criar Sala</button>
-    <button (click)="joinRoom('join-room')">Entrar na sala</button>
+    <button (click)="joinRoom()">Entrar na sala</button>
   </form>
 
   <!-- Área de vídeo quando em uma sala -->
   <div *ngIf="roomId">
     <h2>Sala: {{ roomId }}</h2>
     <input [(ngModel)]="message" placeholder="Digite sua mensagem" name="message" />
-    <!-- <button (click)="sendMessage(message)">Enviar</button> -->
-
     <h3>Mensagens:</h3>
     <ul>
       <li *ngFor="let msg of messages">{{ msg }}</li>
@@ -25,8 +21,14 @@
 
     <!-- Elementos de vídeo -->
     <div class="video-container">
-      <video #localVideo autoplay muted></video>
-      <video #remoteVideo autoplay></video>
+      <div class="local-container">
+        <h3>Vídeo Local</h3>
+        <video #localVideo autoplay muted></video>
+      </div>
+      <div class="remote-container">
+        <h3>Vídeo Remoto</h3>
+        <video #remoteVideo autoplay></video>
+      </div>
     </div>
   </div>
 </div>
