@@ -1,14 +1,17 @@
 package com.video_chamada.Video.chamada.handler;
 
+import java.io.IOException;
+import java.util.HashMap;
+import java.util.Map;
+
 import org.springframework.stereotype.Component;
 import org.springframework.web.socket.CloseStatus;
 import org.springframework.web.socket.TextMessage;
 import org.springframework.web.socket.WebSocketSession;
 import org.springframework.web.socket.handler.TextWebSocketHandler;
 
-import java.io.IOException;
-import java.util.HashMap;
-import java.util.Map;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.video_chamada.model.Mensagem;
 
 @Component
 public class VideoCallWebSocketHandler extends TextWebSocketHandler {
@@ -39,45 +42,56 @@ public class VideoCallWebSocketHandler extends TextWebSocketHandler {
     @Override
     protected void handleTextMessage(WebSocketSession session, TextMessage message) throws IOException {
         String payload = message.getPayload();
-        // log.info("Received message: {} from client: {}", payload, session.getId());
-        System.out.println(String.format("Received message: %s from client: %s.", payload, session.getId()));
 
-        String room = payload.split(":")[1];
+        ObjectMapper objectMapper = new ObjectMapper();
 
-        switch (payload.split(":")[0]) {
-            case "joinRoom":
-                joinRoom(session, room);
-                break;
-            case "ready":
-                broadcastToRoom(room, new TextMessage("ready"));
-                break;
-            case "candidate":
-                onCandidate(session, message);
-                break;
-            default:
-                System.out.println("Invalid message type");
-                break;
+        try {
+            Mensagem mensagemRecebida = objectMapper.readValue(payload, Mensagem.class);
+
+            String room = mensagemRecebida.getRoom();
+
+            switch (mensagemRecebida.getType()) {
+                case "joinRoom":
+                    joinRoom(session, room);
+                    break;
+                case "ready":
+                    broadcastToRoom(room, new TextMessage("ready"));
+                    break;
+                case "candidate":
+                    // onCandidate(session, message);
+                    broadcastToRoom(room, new TextMessage(mensagemRecebida.getContent()));
+                    break;
+                case "offer":
+                    // onOffer(session, message);
+                    broadcastToRoom(room, new TextMessage(mensagemRecebida.getContent()));
+                    break;
+                case "answer":
+                    // onAnswer(session, message);
+                    broadcastToRoom(room, new TextMessage(mensagemRecebida.getContent()));
+                    break;
+                default:
+                    System.out.println("Invalid message type");
+                    break;
+            }
+        } catch (Exception e) {
+            System.out.println("Error parsing message: " + e.getMessage());
         }
-        broadcastToRoom(room, message);
+
     }
 
     private void joinRoom(WebSocketSession session, String room) throws IOException {
         if (isCaller(room)) {
             session.sendMessage(new TextMessage("created"));
-            System.out.println(String.format("Sending setCaller message to client with ID: %s", session.getId()));
             rooms.put(session.getId(), room);
             return;
         }
         int roomSize = getClienteCountInRoom(room);
         if (roomSize > 1) {
             session.sendMessage(new TextMessage("full"));
-            System.out.println(String.format("Client %s tried to join room %s, but it's full", session.getId(), room));
             return;
         }
         rooms.put(session.getId(), room);
         session.sendMessage(new TextMessage("joined:" + room));
-        System.out.println(String.format("Client %s joined room %s, room size: %s", session.getId(), room,
-                getClienteCountInRoom(room)));
     }
 
     private void broadcastToRoom(String room, TextMessage message) {
@@ -107,12 +121,6 @@ public class VideoCallWebSocketHandler extends TextWebSocketHandler {
 
     private boolean isCaller(String room) {
         return getClienteCountInRoom(room) < 1;
-    }
-
-    private void onCandidate(WebSocketSession session, TextMessage message) {
-        String payload = message.getPayload();
-        String room = payload.split(":")[1];
-        broadcastToRoom(room, new TextMessage(payload));
     }
 
 }
