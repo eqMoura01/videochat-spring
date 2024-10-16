@@ -20,13 +20,16 @@ export class VideoRoomComponent implements OnInit {
   remoteMediaStream!: MediaStream;
   public localSdp: RTCSessionDescriptionInit | undefined;
   public localStream: MediaStream | undefined;
-  public didIOffer: boolean = false;
+  public isCaller: boolean = false;
   public roomId: string = 'room1';
   public messages: string[] = [];
   public username: string = '';
   public message: string = '';
   public peerConnection: RTCPeerConnection;
   private pendingOffer: RTCSessionDescriptionInit | null = null;
+  private rtcPeerConnection: RTCPeerConnection | undefined;
+
+
 
   private peerConfiguration: RTCConfiguration = {
     iceServers: [
@@ -40,6 +43,8 @@ export class VideoRoomComponent implements OnInit {
     private webSocketService: WebsocketService
   ) {
     this.peerConnection = new RTCPeerConnection(this.peerConfiguration);
+
+    this.webSocketService.setVideoRoomComponent(this);
   }
 
   ngOnInit(): void {
@@ -49,95 +54,61 @@ export class VideoRoomComponent implements OnInit {
 
   joinRoom(): void {
     this.webSocketService.joinRoom(this.roomId);
-  
+
   }
 
   async setupPeerConnection() {
-    this.localMediaStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-    this.localVideo.nativeElement.srcObject = this.localMediaStream;
+    this.rtcPeerConnection = new RTCPeerConnection(this.peerConfiguration);
+    this.rtcPeerConnection.onicecandidate = this.onIceCandidate;
+    this.rtcPeerConnection.ontrack = this.onAddStream;
 
-    this.localMediaStream.getTracks().forEach(track => {
-      this.peerConnection.addTrack(track, this.localMediaStream);
-    });
+    if (this.localStream && this.localStream.getTracks().length > 0) {
+      // Adiciona todas as trilhas disponíveis do localStream
+      this.localStream.getTracks().forEach(track => {
+        this.rtcPeerConnection?.addTrack(track, this.localStream!);
+      });
+    } else {
+      console.error('Local stream is undefined or has no tracks');
+    }
 
-    this.peerConnection.ontrack = (event) => {
-      console.log('Recebendo stream remoto...', event);
-      this.remoteMediaStream = event.streams[0];
-      this.remoteVideo.nativeElement.srcObject = this.remoteMediaStream;
-    };
+    this.rtcPeerConnection.createOffer().then(sessionDescription => {
 
-    this.peerConnection.onicecandidate = (event) => {
-      if (event.candidate) {
-        console.log('Enviando candidato ICE...', event.candidate);
-        this.addIceCandidate(event.candidate);
-        // this.webSocketService.sendIceCandidate(event.candidate);
+      if (this.rtcPeerConnection) {
+        this.rtcPeerConnection.setLocalDescription(sessionDescription);
+      } else {
+        console.error('rtcPeerConnection is undefined');
       }
-    };
-  }
 
-  async createOffer(didIOffer: boolean): Promise<any> {
-    await this.setupPeerConnection();
-    const offer = await this.peerConnection.createOffer();
-    await this.peerConnection.setLocalDescription(offer);
-    this.didIOffer = true;
-
-    // this.webSocketService.criarSala(this.roomId, offer.sdp!, this.didIOffer);
-    return offer;
-  }
-
-  async createAnswer(sdp: RTCSessionDescriptionInit): Promise<any> {
-    await this.setupPeerConnection();
-
-    this.peerConnection.ontrack = (event) => {
-      console.log('Recebendo stream remoto...', event);
-      this.remoteMediaStream = event.streams[0];
-      this.remoteVideo.nativeElement.srcObject = this.remoteMediaStream;
-    }
-
-    // this.setRemoteDescription(sdp);
-
-    const answer = await this.peerConnection.createAnswer();
-    await this.peerConnection.setLocalDescription(answer);
-
-    // this.webSocketService.sendAnswer(answer);
-
-    return answer;
-  }
-
-  setRemoteDescription(sdp: RTCSessionDescriptionInit): void {
-    if (this.peerConnection.signalingState === 'stable') {
-      // Se a conexão já estiver estável, configurar a oferta imediatamente
-      this.peerConnection.setRemoteDescription(sdp).then(() => {
-        console.log('Remote description set successfully.');
-        // Processar candidatos ICE enfileirados
-        this.processIceCandidatesQueue();
-      }).catch((error) => {
-        console.error('Failed to set remote description: ', error);
+      this.webSocketService.sendMessage({
+        type: 'offer',
+        content: sessionDescription,
+        room: this.roomId
       });
-    } else {
-      // Se a conexão não estiver pronta, armazenar a oferta
-      this.pendingOffer = sdp;
+
+    }).catch(console.error);
+
+
+  }
+
+  onIceCandidate(e: RTCPeerConnectionIceEvent): void {
+    if (e.candidate) {
+
+      console.log('Sending ICE candidate:', e.candidate);
+
+      if(this.webSocketService) {
+        this.webSocketService.sendMessage(
+          {
+            type: 'candidate',
+            content: e.candidate,
+            room: this.roomId
+          }
+        );
+      }
     }
   }
 
-  remoteJoinRoom(): void {
-    // this.webSocketService.entrarSala(this.roomId);
-  }
-  addIceCandidate(candidate: RTCIceCandidateInit): void {
-    if (this.peerConnection.remoteDescription) {
-      this.peerConnection.addIceCandidate(candidate).catch((error) => {
-        console.error('Failed to add ICE candidate: ', error);
-      });
-    } else {
-      console.warn('Remote description not set yet. Queuing ICE candidate.');
-      this.iceCandidatesQueue.push(candidate);
-    }
-  }
-
-  processIceCandidatesQueue(): void {
-    while (this.iceCandidatesQueue.length) {
-      const candidate = this.iceCandidatesQueue.shift();
-      this.addIceCandidate(candidate!);
-    }
+  onAddStream(e: any): void {
+    this.remoteMediaStream = e.stream;
+    this.remoteVideo.nativeElement.srcObject = this.remoteMediaStream;
   }
 }
