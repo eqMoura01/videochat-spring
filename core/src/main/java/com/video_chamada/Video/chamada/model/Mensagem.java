@@ -1,11 +1,13 @@
-package com.video_chamada.model;
+package com.video_chamada.Video.chamada.model;
+
+import java.util.Map;
 
 public class Mensagem {
-
     private String type;
     private String room;
-    private String content;
+    private Map<String, Object> content;  // Mudança: de String para Map<String, Object>
 
+    // Getters e Setters
     public String getType() {
         return type;
     }
@@ -22,11 +24,11 @@ public class Mensagem {
         this.room = room;
     }
 
-    public String getContent() {
+    public Map<String, Object> getContent() {
         return content;
     }
 
-    public void setContent(String content) {
+    public void setContent(Map<String, Object> content) {
         this.content = content;
     }
 
@@ -35,8 +37,15 @@ public class Mensagem {
         return "{" +
                 " \"type\": \"" + getType() + "\"" +
                 ", \"room\": \"" + getRoom() + "\"" +
-                ", \"content\": \"" + getContent() + "\"" +
+                ", \"content\": \"" + getContent().toString() + "\"" +
                 "}";
     }
 
+    public String toStringWithNoContent() {
+        return "{" +
+                " \"type\": \"" + getType() + "\"" +
+                ", \"room\": \"" + getRoom() + "\"" +
+                "}";
+    }
 }
+

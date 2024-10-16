@@ -11,7 +11,7 @@ import org.springframework.web.socket.WebSocketSession;
 import org.springframework.web.socket.handler.TextWebSocketHandler;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.video_chamada.model.Mensagem;
+import com.video_chamada.Video.chamada.model.Mensagem;
 
 @Component
 public class VideoCallWebSocketHandler extends TextWebSocketHandler {
@@ -42,32 +42,35 @@ public class VideoCallWebSocketHandler extends TextWebSocketHandler {
     @Override
     protected void handleTextMessage(WebSocketSession session, TextMessage message) throws IOException {
         String payload = message.getPayload();
-
+    
         ObjectMapper objectMapper = new ObjectMapper();
-
+    
         try {
+            // Desserializar a mensagem recebida
             Mensagem mensagemRecebida = objectMapper.readValue(payload, Mensagem.class);
-
+    
+            // Tratamento flexível para o campo content
+            Map<String, Object> content = mensagemRecebida.getContent();
+    
             String room = mensagemRecebida.getRoom();
-
+            System.out.println(mensagemRecebida.getType());
+    
             switch (mensagemRecebida.getType()) {
                 case "joinRoom":
                     joinRoom(session, room);
                     break;
                 case "ready":
-                    broadcastToRoom(room, new TextMessage("ready"));
+                    Mensagem mensagem = new Mensagem();
+                    mensagem.setType("ready");
+                    broadcastToRoom(room, new TextMessage(mensagem.toStringWithNoContent()));
                     break;
                 case "candidate":
-                    // onCandidate(session, message);
-                    broadcastToRoom(room, new TextMessage(mensagemRecebida.getContent()));
-                    break;
                 case "offer":
-                    // onOffer(session, message);
-                    broadcastToRoom(room, new TextMessage(mensagemRecebida.getContent()));
+                    broadcastToRoom(room, new TextMessage(objectMapper.writeValueAsString(content)));
                     break;
                 case "answer":
-                    // onAnswer(session, message);
-                    broadcastToRoom(room, new TextMessage(mensagemRecebida.getContent()));
+                    // Tratar o conteúdo da mensagem
+                    broadcastToRoom(room, new TextMessage(objectMapper.writeValueAsString(content)));
                     break;
                 default:
                     System.out.println("Invalid message type");
@@ -76,8 +79,8 @@ public class VideoCallWebSocketHandler extends TextWebSocketHandler {
         } catch (Exception e) {
             System.out.println("Error parsing message: " + e.getMessage());
         }
-
     }
+    
 
     private void joinRoom(WebSocketSession session, String room) throws IOException {
         if (isCaller(room)) {
@@ -85,7 +88,7 @@ public class VideoCallWebSocketHandler extends TextWebSocketHandler {
             Mensagem mensagem = new Mensagem();
             mensagem.setType("created");
             mensagem.setRoom(room);
-            session.sendMessage(new TextMessage(mensagem.toString()));
+            session.sendMessage(new TextMessage(mensagem.toStringWithNoContent()));
             rooms.put(session.getId(), room);
             return;
         }
@@ -96,12 +99,10 @@ public class VideoCallWebSocketHandler extends TextWebSocketHandler {
         }
         rooms.put(session.getId(), room);
 
-
-
         Mensagem mensagem = new Mensagem();
         mensagem.setType("joined");
         mensagem.setRoom(room);
-        session.sendMessage(new TextMessage(mensagem.toString()));
+        session.sendMessage(new TextMessage(mensagem.toStringWithNoContent()));
     }
 
     private void broadcastToRoom(String room, TextMessage message) {
