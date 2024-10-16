@@ -60,8 +60,6 @@ export class WebsocketService {
         // Lógica para enviar oferta
         break;
       case 'offer':
-
-        console.log('Offer received ASIDHuahsudhasuh');
         // Lógica para receber oferta
         break;
       case 'answer':
